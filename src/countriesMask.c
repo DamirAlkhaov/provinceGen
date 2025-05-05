@@ -111,8 +111,8 @@ COUNTRIES_MASK* edgeDetect_ReturnIDMAP(){
 
     printf("Found %d countries\nPress Enter to continue..", countriesCount);
     printf("DEBUG: countryMap[0,0] = %d", countryMap[0]);
-    scanf("%*c");  // Read and discard any character (including the leftover newline)
-    getchar();     // Then wait for new input
+    scanf("%*c"); 
+    getchar();     
 
     // check for -2 pixels AFTER all of the countries have been found.
     int directions[8][2] = {
