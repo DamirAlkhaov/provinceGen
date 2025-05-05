@@ -11,7 +11,7 @@
 
 #define COLOR_THRESHOLD 0
 
-#define PIXEL_SPACING 15
+#define PIXEL_SPACING 40
 
 
 //used by the queue system to remember queued pixels
@@ -83,31 +83,36 @@ void growProvince(PROVINCE_CENTER* p, int* map, int* densityMap, int* countryMas
         return;
     }
     
-    int growthThisTurn = 10;
-    int processed = 0;
-    for (int i = 0; i < initialBorderCount; i++) { // Use initial count
+    for (int i = 0; i < initialBorderCount; i++) {
         POINT current = p->borderArray[i];
-        
+        int px = p->x - current.x;
+        int py = p->y - current.y;
+
+        // Skip with chance
+        if (px * px + py * py > PIXEL_SPACING){
+            if (1 + rand() % 100 < 30) {
+                addBorderPixel(p, current.x, current.y, width, height);
+                continue;
+            }
+        }
+
         for (int d = 0; d < 4; d++) {
             int nx = current.x + directions[d][0];
             int ny = current.y + directions[d][1];
-            
+
             if (nx >= 0 && nx < width && ny >= 0 && ny < height && 
                 map[ny*width + nx] == 0 && densityMap[ny*width + nx] != 0 && 
-                (countryMaskMap == NULL || p->countryID == countryMaskMap[ny*width + nx] || countryMaskMap[ny*width + nx] == -2)){
+                (!countryMaskMap || p->countryID == countryMaskMap[ny*width + nx] || countryMaskMap[ny*width + nx] == -2)) {
                 
                 map[ny*width + nx] = p->ID;
                 addBorderPixel(p, nx, ny, width, height);
-                
             }
         }
-        processed++;
     }
-    
     // Remove processed pixels (shift array down)
     memmove(p->borderArray, 
             p->borderArray + initialBorderCount,
-            (p->borderCount - initialBorderCount) * sizeof(POINT));
+            (p->borderCount - initialBorderCount    ) * sizeof(POINT));
     p->borderCount -= initialBorderCount;
 }
 
@@ -204,34 +209,69 @@ int main(int argc, char* argv[]){
     //----
     // ADD A SPACER FOR PROVINCE ROOTS SO THAT YOU GET FAIR AND EQUAL GROWTH BETWEEN NEIGHBOURS! don't want dick provinces popping up.
     //----
-    int pixelSpace = (mainImg->width * PIXEL_SPACING) / provinceCount;
-    for (int i = 0; i < provinceCount; i++){
-        int x = rand() % mainImg->width;
-        int y = rand() % mainImg->height;
 
-        if (map[y * mainImg->width + x] == 0 && densityMap[y * mainImg->width + x] != 0){
-            if ( 1 + rand() % 100 > densityMap[y * mainImg->width + x]){
-                puts("skipped spawn");
-                i--;
-                continue;
-            }
+    //poisson sampling
+    int maxPoints = provinceCount * 2;
+    POINT* poissonPoints = malloc(maxPoints * sizeof(POINT));
+    int pointCount = 0;
 
-            int tooCloseNeighbour = 0;
-            for (int j = 0; j < i-1; j++){
-                int dx = Points[j].x - x;
-                int dy = Points[j].y - y;
-                if (dx * dx + dy * dy < PIXEL_SPACING * PIXEL_SPACING){
-                    
-                    if (UseCountryMask){
-                        if (cmask->countryMap[Points[j].y * mainImg->width + Points[j].x] != cmask->countryMap[y * mainImg->width + x]){
-                            continue;
-                        }
-                    }
-                    i--;
-                    tooCloseNeighbour = 1;
+    // Grid to accelerate neighbor lookup
+    int gridWidth = (mainImg->width / PIXEL_SPACING) + 1;
+    int gridHeight = (mainImg->height / PIXEL_SPACING) + 1;
+    POINT** grid = calloc(gridWidth * gridHeight, sizeof(POINT*));
+
+    float cellSize = PIXEL_SPACING / sqrtf(2.0f);
+
+    int getGridIndex(int x, int y) {
+        return (y / PIXEL_SPACING) * gridWidth + (x / PIXEL_SPACING);
+    }
+    
+    int isFarEnough(int x, int y) {
+        int gx = x / PIXEL_SPACING;
+        int gy = y / PIXEL_SPACING;
+    
+        for (int i = -2; i <= 2; i++) {
+            for (int j = -2; j <= 2; j++) {
+                int nx = gx + i;
+                int ny = gy + j;
+                if (nx < 0 || ny < 0 || nx >= gridWidth || ny >= gridHeight) continue;
+    
+                POINT* neighbor = grid[ny * gridWidth + nx];
+                if (neighbor) {
+                    int dx = neighbor->x - x;
+                    int dy = neighbor->y - y;
+                    if (dx * dx + dy * dy < PIXEL_SPACING * PIXEL_SPACING) return 0;
                 }
             }
-            if (tooCloseNeighbour) continue;
+        }
+    
+        return 1;
+    }
+
+    
+    // Start with a single random point
+    while (pointCount < provinceCount) {
+        int x = rand() % mainImg->width;
+        int y = rand() % mainImg->height;
+        int index = y * mainImg->width + x;
+        if (map[index] != 0 || densityMap[index] == 0) continue;
+        if ( 1 + rand() % 100 > densityMap[y * mainImg->width + x]){
+            puts("skipped spawn");
+            continue;
+        }
+
+        if (!isFarEnough(x, y)) continue;
+
+        poissonPoints[pointCount++] = (POINT){x, y};
+        grid[getGridIndex(x, y)] = &poissonPoints[pointCount - 1];
+    }
+
+    int pixelSpace = (mainImg->width * PIXEL_SPACING) / provinceCount;
+    for (int i = 0; i < provinceCount; i++){
+        int x = poissonPoints[i].x;
+        int y = poissonPoints[i].y;
+
+        if (map[y * mainImg->width + x] == 0 && densityMap[y * mainImg->width + x] != 0){
 
             // land add the province here
             map[y * mainImg->width + x] = i+1;
@@ -266,7 +306,7 @@ int main(int argc, char* argv[]){
     //expand province points borders, uses BFS algorithm
     int activeProvinces = provinceCount;
     int unchangedIterations = 0;
-    const int MAX_UNCHANGED = 10; 
+    const int MAX_UNCHANGED = 1000; 
 
     while (activeProvinces > 0 && unchangedIterations < MAX_UNCHANGED) {
         int changed = 0;
