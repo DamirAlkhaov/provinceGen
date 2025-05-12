@@ -1,11 +1,10 @@
 # Province Generator
 Program that generates a province map using a height map and country mask(optional) for games like HOI4/eu4
 
-<img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/output_raylib.bmp" alt="Alt Text" width="300" height="300">
-Image of provinces in unique color
-
-<img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/edges.bmp" alt="Alt Text" width="300" height="300">
-Image of the provinces with edge detection
+| First Header  | Second Header |
+| ------------- | ------------- |
+| <img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/output_raylib.bmp" alt="Alt Text" width="300" height="300"> | <img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/edges.bmp" alt="Alt Text" width="300" height="300">  |
+| Image of provinces in unique color | Image of the provinces with edge detection |
 
 ## Building
 Currently only have windows libs on the repo, but if you get linux or mac repos it should work since I incorporated that to the makefile.
