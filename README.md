@@ -3,7 +3,7 @@ Program that generates a province map using a height map and country mask(option
 
 | First Header  | Second Header |
 | ------------- | ------------- |
-| <img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/output_raylib.bmp" alt="Alt Text" width="300" height="300"> | <img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/edges.bmp" alt="Alt Text" width="300" height="300">  |
+| <img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/output_raylib.bmp" alt="Alt Text" width="512" height="512"> | <img src="https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/edges.bmp" alt="Alt Text" width="512" height="512">  |
 | Image of provinces in unique color | Image of the provinces with edge detection |
 
 ## Building
