@@ -11,3 +11,5 @@ typedef struct {
 
 
 BMP* bmpLoad(char fileName[256]);
+
+unsigned char* bmp2Memory(const char* fileName, int* sizeOut);

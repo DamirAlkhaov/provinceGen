@@ -31,7 +31,12 @@ BMP* bmpLoad(char fileName[256]) {
         return NULL;
     }
 
-    fread(bmp->header, sizeof(unsigned char), 54, file);
+    if (fread(bmp->header, sizeof(unsigned char), 54, file) != 54) {
+        perror("Failed to read BMP header");
+        free(bmp);
+        fclose(file);
+        return NULL;
+    }
     
     // Extract metadata
     bmp->width = *(int*)&bmp->header[18];
@@ -55,3 +60,35 @@ BMP* bmpLoad(char fileName[256]) {
     fclose(file);
     return bmp;
 }
+
+unsigned char* bmp2Memory(const char* fileName, int* sizeOut){
+    FILE *file = fopen(fileName, "rb");
+    if (!file) {
+        perror("Failed to open file");
+        return NULL;
+    }
+
+    fseek(file, 0, SEEK_END);
+    int fileSize = ftell(file);
+    rewind(file);
+
+    unsigned char* data = malloc(fileSize);
+    if (!data) {
+        perror("Memory allocation failed");
+        fclose(file);
+        return NULL;
+    }
+
+    size_t bytesRead = fread(data, 1, fileSize, file);
+    if (bytesRead != fileSize) {
+        fprintf(stderr, "Failed to read entire file\n");
+        free(data);
+        fclose(file);
+        return NULL;
+    }
+
+    fclose(file);
+    *sizeOut = fileSize;
+    return data;
+}
+

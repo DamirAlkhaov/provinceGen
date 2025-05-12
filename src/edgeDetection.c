@@ -32,7 +32,7 @@ int main(){
         int xNew = 0;
         for (int x = 0; x < image->rowSize; x += bytesPerPixel) {
             // Skip incomplete pixels at row end
-            if (x + bytesPerPixel > image->rowSize) continue;
+            if (xNew >= image->width) continue;
 
             const int index = y * image->rowSize + x;
             BGR current = {

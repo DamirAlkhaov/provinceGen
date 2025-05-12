@@ -1,9 +1,6 @@
 #include "countriesMask.h"
 
-COUNTRIES_MASK* edgeDetect_ReturnIDMAP(){
-    char filename[256];
-    printf("filename: ");
-    scanf("%255s", filename);
+COUNTRIES_MASK* edgeDetect_ReturnIDMAP(char* filename){
 
     BMP* image = bmpLoad(filename);
     if (!image) {
@@ -11,7 +8,7 @@ COUNTRIES_MASK* edgeDetect_ReturnIDMAP(){
         return NULL;
     }
 
-    BGR countries[1000];
+    BGR countries[10000];
     int countriesCount = 0;
 
     const int bytesPerPixel = image->bitDepth;
@@ -107,12 +104,7 @@ COUNTRIES_MASK* edgeDetect_ReturnIDMAP(){
             xNew++;
         }
         yNew--;
-    }
-
-    printf("Found %d countries\nPress Enter to continue..", countriesCount);
-    printf("DEBUG: countryMap[0,0] = %d", countryMap[0]);
-    scanf("%*c"); 
-    getchar();     
+    }   
 
     // check for -2 pixels AFTER all of the countries have been found.
     int directions[8][2] = {
