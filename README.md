@@ -1,5 +1,9 @@
 # Province Generator
 Program that generates a province map using a height map and country mask(optional) for games like HOI4/eu4
+![](https://github.com/DamirAlkhaov/provinceGen/raw/refs/heads/master/output_raylib.bmp)
+
+## Building
+Currently only have windows libs on the repo, but if you get linux or mac repos it should work since I incorporated that to the makefile.
 
 ## Usage
 -- for the base map you need a map of your world. red channel == spawn density | blue channel == water (not land, cannot spawn provinces here)
