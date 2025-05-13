@@ -192,8 +192,9 @@ void growProvince(PROVINCE_CENTER* p, int* map, int* densityMap, COUNTRIES_MASK*
     p->borderCount -= initialBorderCount;
 }
 
-unsigned char* program(char* fileName, COUNTRIES_MASK* cmask, int UseCountryMask, int* fileSize, float PIXEL_SPACING) {
+unsigned char* program(char* fileName, char* cfileName, int* fileSize, float PIXEL_SPACING) {
     puts("DEBUG : Initiating map generation program");
+    printf("DEBUG : main mask: %s\n", fileName);
 
     // Initialize all pointers to NULL
     BMP *mainImg = NULL;
@@ -205,6 +206,18 @@ unsigned char* program(char* fileName, COUNTRIES_MASK* cmask, int UseCountryMask
     unsigned char *newPixels = NULL;
     unsigned char *data = NULL;
     POINT* poissonPoints = NULL;
+    COUNTRIES_MASK *cmask = NULL;
+    int UseCountryMask = 0;
+
+    if (strlen(cfileName) > 0){
+        cmask = edgeDetect_ReturnIDMAP(cfileName);
+        if (cmask == NULL){
+            perror("Error with country mask");
+            return NULL;
+        }
+
+        UseCountryMask = 1;
+    }
 
     // Load the main image
     mainImg = bmpLoad(fileName);
@@ -576,24 +589,33 @@ unsigned char* program(char* fileName, COUNTRIES_MASK* cmask, int UseCountryMask
 
 cleanup:
     // Free all allocated resources
-    free(map);
-    free(densityMap);
-    free(colorHashMap);
-    free(newPixels);
-    free(poissonPoints);
-    free(grid);
-    free(floodMap);
+    if (map) free(map);
+    if (densityMap) free(densityMap);
+    if (colorHashMap) free(colorHashMap);
+    if (newPixels) free(newPixels);
+    if (poissonPoints) free(poissonPoints);
+    if (grid) free(grid);
+    if (floodMap) free(floodMap);
     
     if (Points) {
         for (int i = 0; i < provinceCount; i++) {
-            free(Points[i].borderArray);
+            if (Points[i].borderArray) free(Points[i].borderArray);
         }
         free(Points);
     }
     
-    if (mainImg) {
-        free(mainImg->pixels);
+   if (mainImg) {
+        if (mainImg->pixels) {
+            free(mainImg->pixels);
+            mainImg->pixels = NULL;  // Explicit nulling
+        }
         free(mainImg);
+        mainImg = NULL;
+    }
+
+    if (cmask) {
+        if (cmask->countryMap) free(cmask->countryMap);
+        free(cmask);
     }
 
     return data;
