@@ -5,6 +5,7 @@
 *.txt
 *.af*
 .vscode
+.VSCodeCounter
 
 !eu.bmp
 !euc.bmp
