@@ -178,7 +178,7 @@ void growProvince(int waterTile, PROVINCE_CENTER* p, int* map, int* densityMap, 
                 map[ny*width + nx] == waterTile && (densityMap[ny*width + nx] != 0 || waterTile != 0)) {
 
                 if (cmask!= NULL){
-                    if ((p->countryID == cmask->countryMap[ny*width + nx] || cmask->countryMap[ny*width + nx] == -2)){
+                    if ((p->countryID == cmask->countryMap[ny*width + nx] || cmask->countryMap[ny*width + nx] == -2) || waterTile == -1){
                         map[ny*width + nx] = p->ID;
                         addBorderPixel(p, nx, ny, width, height);
                     }
