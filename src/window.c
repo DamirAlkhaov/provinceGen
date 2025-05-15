@@ -33,6 +33,7 @@ int main(){
     float scale;
 
     float pixelSpacing = 40;
+    float navalPixelSpacing = 100;
 
     while (!WindowShouldClose()){
 
@@ -49,7 +50,7 @@ int main(){
             
                 int attempts = 0;
                 while (attempts < 3) {
-                    data = program(fileName, cfileName, &fileSize, pixelSpacing);
+                    data = program(fileName, cfileName, &fileSize, pixelSpacing, navalPixelSpacing);
                     if (data && fileSize > 0) break;
                     
                     attempts++;
@@ -91,12 +92,21 @@ int main(){
 
         DrawRectangle(0, 0, 800, 800, GRAY);
 
+        //pixel spacing slider
         char pixelS[256];
         sprintf(pixelS, "Pixel Spacing: %.2f", pixelSpacing);
         DrawText(pixelS, 10, 10, 20, BLACK);
 
-        //pixel spacing slider
+        
         GuiSlider((Rectangle){30, 30, 300, 20}, "15", "300", &pixelSpacing, 15, 300);
+        //--------------------------------
+
+        //naval spacing slider
+        sprintf(pixelS, "Naval Pixel Spacing: %.2f", navalPixelSpacing);
+        DrawText(pixelS, 380, 10, 20, BLACK);
+        
+        GuiSlider((Rectangle){390, 30, 300, 20}, "15", "300", &navalPixelSpacing, 15, 300);
+        //--------------------------------
 
         //main mask input
         DrawText("Main mask:", 10, 50, 20, BLACK);

@@ -31,6 +31,8 @@ typedef struct {
 
     int countryID;
     int size;
+
+    int water;
 } PROVINCE_CENTER;
 
 static int gridWidth;    
@@ -100,7 +102,7 @@ void addBorderPixel(PROVINCE_CENTER* p, int x, int y, int width, int height) {
     p->size++;
 }
 
-void floodFill(PROVINCE_CENTER* p, int* map, int* densityMap, int* floodMap, int width, int height) {
+void floodFill(int waterTile, PROVINCE_CENTER* p, int* map, int* densityMap, int* floodMap, int width, int height) {
     int directions[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
 
     puts("DEBUG : floodFill function call");
@@ -119,8 +121,8 @@ void floodFill(PROVINCE_CENTER* p, int* map, int* densityMap, int* floodMap, int
                 int ny = current.y + directions[d][1];
 
                 if (nx >= 0 && nx < width && ny >= 0 && ny < height && 
-                    map[ny*width + nx] == 0 && densityMap[ny*width + nx] != 0 && floodMap[ny*width+nx] == 0) {
-
+                    map[ny*width + nx] == waterTile && (densityMap[ny*width + nx] != 0 || waterTile != 0) && floodMap[ny*width+nx] == 0) {
+                    
                     floodMap[ny*width + nx] = p->ID;
                     addBorderPixel(p, nx, ny, width, height);
                     changed = 1;
@@ -144,13 +146,15 @@ void floodFill(PROVINCE_CENTER* p, int* map, int* densityMap, int* floodMap, int
 }
 
 //function that takes existing starter points and grows them with BFS
-void growProvince(PROVINCE_CENTER* p, int* map, int* densityMap, COUNTRIES_MASK* cmask, int width, int height) {
+void growProvince(int waterTile, PROVINCE_CENTER* p, int* map, int* densityMap, COUNTRIES_MASK* cmask, int width, int height) {
     int directions[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
     int initialBorderCount = p->borderCount; // Capture before modification
 
-    int chance = rand() % 100;
-    if (chance < 10 / p->growthSpeed){
-        return;
+    if (!waterTile){
+        int chance = rand() % 100;
+        if (chance < 10 / p->growthSpeed){
+            return;
+        }
     }
     
     for (int i = 0; i < initialBorderCount; i++) {
@@ -171,7 +175,7 @@ void growProvince(PROVINCE_CENTER* p, int* map, int* densityMap, COUNTRIES_MASK*
             int ny = current.y + directions[d][1];
 
             if (nx >= 0 && nx < width && ny >= 0 && ny < height && 
-                map[ny*width + nx] == 0 && densityMap[ny*width + nx] != 0) {
+                map[ny*width + nx] == waterTile && (densityMap[ny*width + nx] != 0 || waterTile != 0)) {
 
                 if (cmask!= NULL){
                     if ((p->countryID == cmask->countryMap[ny*width + nx] || cmask->countryMap[ny*width + nx] == -2)){
@@ -192,9 +196,220 @@ void growProvince(PROVINCE_CENTER* p, int* map, int* densityMap, COUNTRIES_MASK*
     p->borderCount -= initialBorderCount;
 }
 
-unsigned char* program(char* fileName, char* cfileName, int* fileSize, float PIXEL_SPACING) {
+int provinceFunction(int initial, int waterTile, PROVINCE_CENTER* Points, POINT* poissonPoints, COUNTRIES_MASK* cmask, int* map, int* densityMap, int* floodMap, int provinceCount, float PIXEL_SPACING, int width, int height){
+    // --- Poisson Disk Sampling (Bridson's Algorithm) ---
+    // Add flood fill for the seeds so that ALL continents get one seed. 
+
+    #define MAX_ATTEMPTS 1000
+
+    int maxSamples = provinceCount;
+    int maxPoints = maxSamples * 2;
+    gridCellSize = PIXEL_SPACING / sqrtf(2.0f);
+
+    int minIslandSize = waterTile ? 1000 : 100;
+
+    gridWidth = (width / gridCellSize) + 1;
+    gridHeight = (height / gridCellSize) + 1;
+    grid = calloc(gridWidth * gridHeight, sizeof(POINT*));
+
+    poissonPoints = malloc(maxPoints * sizeof(POINT));
+    POINT* processList = malloc(maxPoints * sizeof(POINT));
+    int sampleCount = 0, processCount = 0;
+
+    // seed points via flood fill for continents/islands.
+    if (!floodMap){
+        floodMap = malloc(height * width * sizeof(int));
+        memset(floodMap, 0, sizeof(int) * width * height);
+    }
+    if (!floodMap){
+        perror("Failed to allocate memory for the Flood map.");
+        return 0;
+    }
+
+    puts("DEBUG : FLOODING MAP WITH SAMPLES");
+
+    int changed;
+    int done = 0;
+    while (!done) {
+        changed = 0;
+
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                int index = y * width + x;
+
+                // Check if shit is good for landing
+                if (map[index] == waterTile && (densityMap[index] > 0 || waterTile != 0) && floodMap[index] == 0){
+                    // start flood fill then add seed to the index point;
+                    //printf("DEBUG : Flooding at %d, %d\n IsWater: %d\n", x, y, map[index]);
+
+                    PROVINCE_CENTER poissonSeedPoint;
+                    poissonSeedPoint.x = x;
+                    poissonSeedPoint.y = y;
+                    poissonSeedPoint.ID = sampleCount+1;
+                    poissonSeedPoint.borderCount = 1;
+                    poissonSeedPoint.borderArrayCapacity = 100;
+                    poissonSeedPoint.size = 0;
+                    poissonSeedPoint.water = waterTile;
+
+                    poissonSeedPoint.borderArray = malloc(100 * sizeof(POINT));
+                    if (!poissonSeedPoint.borderArray) {
+                        perror("Failed to allocate border array");
+                        free(poissonSeedPoint.borderArray);
+                        return 0;
+                    }
+                    poissonSeedPoint.borderArray[0] = (POINT){x, y};
+
+                    floodFill(waterTile, &poissonSeedPoint, map, densityMap, floodMap, width, height);
+
+                    if (poissonSeedPoint.size < minIslandSize) {
+                        free(poissonSeedPoint.borderArray);
+                        puts("DEBUG : ignored lake/too small  body of water");
+                        continue;
+                    }
+
+                    poissonPoints[sampleCount] = (POINT){x, y};
+                    processList[processCount] = poissonPoints[sampleCount];
+                    grid[getCellIndex(x, y)] = &poissonPoints[sampleCount];
+                    sampleCount++;
+                    processCount++;
+                    changed = 1;
+
+                    free(poissonSeedPoint.borderArray);
+                }
+            }
+        }
+
+        if (!changed){
+            done = 1;
+        }
+    }
+
+    puts("DEBUG : finished flooding");
+
+    // --- Generate more points
+    while (processCount > 0 && sampleCount < maxSamples) {
+        int idx = rand() % processCount;
+        POINT center = processList[idx];
+        
+        if (waterTile == -1) printf("DEBUG : Processing seed %d, process queue: %d, sample count: %d\n", idx, processCount, sampleCount);
+
+        int attempts = 0;
+        while (attempts < MAX_ATTEMPTS && sampleCount < maxSamples) {
+            float angle = (float)rand() / RAND_MAX * 2 * M_PI;
+            float radius = PIXEL_SPACING * (1 + ((float)rand() / RAND_MAX));
+            int nx = center.x + cosf(angle) * radius;
+            int ny = center.y + sinf(angle) * radius;
+
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height)
+                { attempts++; continue; }
+
+            int nidx = ny * width + nx;
+            if (map[nidx] != waterTile || (densityMap[nidx] == 0 && waterTile == 0))
+                { attempts++; continue; }
+
+            // Check nearby grid cells
+            int gx = nx / gridCellSize;
+            int gy = ny / gridCellSize;
+            int tooClose = 0;
+            for (int j = -2; j <= 2 && !tooClose; j++) {
+                for (int i = -2; i <= 2; i++) {
+                    int cx = gx + i;
+                    int cy = gy + j;
+                    if (cx < 0 || cy < 0 || cx >= gridWidth || cy >= gridHeight) continue;
+                    POINT* neighbor = grid[cy * gridWidth + cx];
+                    if (neighbor) {
+                        int dx = neighbor->x - nx;
+                        int dy = neighbor->y - ny;
+                        float spacing = calculateDensityDistance(center.y * width + center.x, densityMap, PIXEL_SPACING);
+
+                        if (dx*dx + dy*dy < spacing*spacing) {
+                            tooClose = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!tooClose) {
+                poissonPoints[sampleCount] = (POINT){nx, ny};
+                processList[processCount++] = poissonPoints[sampleCount];
+                grid[getCellIndex(nx, ny)] = &poissonPoints[sampleCount];
+                sampleCount++;
+            }
+
+            attempts++;
+        }
+
+        // Remove processed center
+        processList[idx] = processList[--processCount];
+    }
+
+    provinceCount = sampleCount;
+    puts("DEBUG : Finished placing the rest poisson points");
+    // Initialize provinces
+    for (int i = initial; i < provinceCount+initial; i++) {
+        int x = poissonPoints[i - initial].x;
+        int y = poissonPoints[i - initial].y;
+        int index = y * width + x;
+
+        map[index] = i+1;
+        int cID = cmask ? cmask->countryMap[index] : -2;
+
+        Points[i].x = x;
+        Points[i].y = y;
+        Points[i].ID = i+1;
+        Points[i].growthSpeed = 1.0f;
+        Points[i].borderCount = 1;
+        Points[i].borderArrayCapacity = 100;
+        Points[i].countryID = cID;
+        Points[i].size = 0;
+        Points[i].water = waterTile;
+
+        Points[i].borderArray = malloc(100 * sizeof(POINT));
+        if (!Points[i].borderArray) {
+            perror("Failed to allocate border array");
+            // Free previously allocated border arrays
+            for (int j = 0; j < i; j++) {
+                free(Points[j].borderArray);
+            }
+            return 0;
+        }
+        Points[i].borderArray[0] = (POINT){x, y};
+        if (waterTile == -1) printf("DEBUG : Initialized Point %d\n", i);
+    }
+
+    puts("DEBUG : FINISHED SPAWNING PROVINCE ROOTS");
+
+    // Grow provinces using BFS
+    int activeProvinces = provinceCount;
+    int unchangedIterations = 0;
+    const int MAX_UNCHANGED = 1000;
+
+    while (activeProvinces > 0 && unchangedIterations < MAX_UNCHANGED) {
+        int changed = 0;
+        
+        for (int i = initial; i < provinceCount+initial; i++) {
+            int before = Points[i].borderCount;
+            if (before > 0) {
+                growProvince(waterTile, &Points[i], map, densityMap, cmask, width, height);
+                if (Points[i].borderCount != before) changed = 1;
+                if (Points[i].borderCount == 0) {
+                    activeProvinces--;
+                }
+            }
+        }
+        
+        if (!changed) unchangedIterations++;
+        else unchangedIterations = 0;
+    }
+
+    puts("DEBUG : finished growing provinces");
+    memset(floodMap, 0, sizeof(int) * width * height);
+    return 1;
+}
+
+unsigned char* program(char* fileName, char* cfileName, int* fileSize, float PIXEL_SPACING, float NAVAL_PIXEL_SPACING) {
     puts("DEBUG : Initiating map generation program");
-    printf("DEBUG : main mask: %s\n", fileName);
 
     // Initialize all pointers to NULL
     BMP *mainImg = NULL;
@@ -240,6 +455,7 @@ unsigned char* program(char* fileName, char* cfileName, int* fileSize, float PIX
     }
 
     int landCount = 0;
+    int waterCount = 0;
 
     // Create land/water and density maps
     int yNew = 0;
@@ -250,11 +466,11 @@ unsigned char* program(char* fileName, char* cfileName, int* fileSize, float PIX
             unsigned char blue = mainImg->pixels[y * mainImg->rowSize + x];
             unsigned char green = mainImg->pixels[y * mainImg->rowSize + x + 1];
             unsigned char red = mainImg->pixels[y * mainImg->rowSize + x + 2];
-            unsigned char gray = blue;
 
             // Land/water classification
-            if(gray > 200) {
+            if(blue > 10) {
                 map[index] = -1;
+                waterCount++;
             } else {
                 landCount++;
                 map[index] = 0;
@@ -280,6 +496,7 @@ unsigned char* program(char* fileName, char* cfileName, int* fileSize, float PIX
 
     // Estimate province area based on spacing
     float provinceArea = 3.14f * PIXEL_SPACING * PIXEL_SPACING / 4.0f; // approximating circular influence
+    float navalProvinceArea = 3.14f * NAVAL_PIXEL_SPACING * NAVAL_PIXEL_SPACING / 4.0f;
 
     // Compute weighted land score from densityMap
     float weightedLand = 0.0f;
@@ -301,247 +518,38 @@ unsigned char* program(char* fileName, char* cfileName, int* fileSize, float PIX
 
     // Derive province count from weighted land and estimated province area
     int provinceCount = (int)(weightedLand / provinceArea);
+    int naval_provinceCount = (int)(waterCount / navalProvinceArea);
     if (provinceCount < 1) provinceCount = 1;  // safety guard
 
     printf("Weighted Land Score: %.2f\nEstimated Province Count: %d\n", weightedLand, provinceCount);
-
+    printf("Water pixels: %d\nNaval Province Count: %d\n", waterCount, naval_provinceCount);
 
     // Allocate province centers
-    Points = malloc(provinceCount * sizeof(PROVINCE_CENTER));
+    Points = malloc((provinceCount + naval_provinceCount) * sizeof(PROVINCE_CENTER));
     if (!Points) {
         perror("Failed to allocate province centers");
+        return 0;
+    }
+
+    if (!provinceFunction(0, 0, Points, poissonPoints, cmask, map, densityMap, floodMap, provinceCount, PIXEL_SPACING, mainImg->width, mainImg->height)){
         goto cleanup;
     }
 
-    // --- Poisson Disk Sampling (Bridson's Algorithm) ---
-    // Add flood fill for the seeds so that ALL continents get one seed. 
-
-    #define MAX_ATTEMPTS 1000
-
-    int maxSamples = provinceCount;
-    int maxPoints = maxSamples * 2;
-    gridCellSize = PIXEL_SPACING / sqrtf(2.0f);
-
-    gridWidth = (mainImg->width / gridCellSize) + 1;
-    gridHeight = (mainImg->height / gridCellSize) + 1;
-    grid = calloc(gridWidth * gridHeight, sizeof(POINT*));
-
-    poissonPoints = malloc(maxPoints * sizeof(POINT));
-    POINT* processList = malloc(maxPoints * sizeof(POINT));
-    int sampleCount = 0, processCount = 0;
-
-    // seed points via flood fill for continents/islands.
-    floodMap = malloc(mainImg->height * mainImg->width * sizeof(int));
-    if (!floodMap){
-        perror("Failed to allocate memory for the Flood map.");
-        goto cleanup;
-    }
-
-    puts("DEBUG : FLOODING MAP WITH SAMPLES");
-
-    int changed;
-    int done = 0;
-    while (!done) {
-        changed = 0;
-
-        for (int y = 0; y < mainImg->height; y++){
-            for (int x = 0; x < mainImg->width; x++){
-                int index = y * mainImg->width + x;
-
-                // Check if shit is good for landing
-                if (map[index] == 0 && densityMap[index] > 0 && floodMap[index] == 0){
-                    // start flood fill then add seed to the index point;
-                    printf("DEBUG : Flooding at %d, %d\n", x, y);
-
-                    PROVINCE_CENTER poissonSeedPoint;
-                    poissonSeedPoint.x = x;
-                    poissonSeedPoint.y = y;
-                    poissonSeedPoint.ID = sampleCount+1;
-                    poissonSeedPoint.borderCount = 1;
-                    poissonSeedPoint.borderArrayCapacity = 100;
-                    poissonSeedPoint.size = 0;
-
-                    poissonSeedPoint.borderArray = malloc(100 * sizeof(POINT));
-                    if (!poissonSeedPoint.borderArray) {
-                        perror("Failed to allocate border array");
-                        free(poissonSeedPoint.borderArray);
-                        goto cleanup;
-                    }
-                    poissonSeedPoint.borderArray[0] = (POINT){x, y};
-
-                    floodFill(&poissonSeedPoint, map, densityMap, floodMap, mainImg->width, mainImg->height);
-
-                    if (poissonSeedPoint.size < 100) {
-                        free(poissonSeedPoint.borderArray);
-                        continue;
-                    }
-
-                    poissonPoints[sampleCount] = (POINT){x, y};
-                    processList[processCount] = poissonPoints[sampleCount];
-                    grid[getCellIndex(x, y)] = &poissonPoints[sampleCount];
-                    sampleCount++;
-                    processCount++;
-                    changed = 1;
-
-                    free(poissonSeedPoint.borderArray);
-                }
-            }
-        }
-
-        if (!changed){
-            done = 1;
-        }
-    }
-
-    // --- Generate more points
-    while (processCount > 0 && sampleCount < maxSamples) {
-        int idx = rand() % processCount;
-        POINT center = processList[idx];
-
-        int attempts = 0;
-        while (attempts < MAX_ATTEMPTS && sampleCount < maxSamples) {
-            float angle = (float)rand() / RAND_MAX * 2 * M_PI;
-            float radius = PIXEL_SPACING * (1 + ((float)rand() / RAND_MAX));
-            int nx = center.x + cosf(angle) * radius;
-            int ny = center.y + sinf(angle) * radius;
-
-            if (nx < 0 || ny < 0 || nx >= mainImg->width || ny >= mainImg->height)
-                { attempts++; continue; }
-
-            int nidx = ny * mainImg->width + nx;
-            if (map[nidx] != 0 || densityMap[nidx] == 0)
-                { attempts++; continue; }
-
-            // Respect density (removed cause doesn't work with poisson sampling) instead I increase the required distance for lower density.
-            /*
-            if (1 + rand() % 100 > densityMap[nidx])
-                { attempts++; continue; }
-            */
-
-            // Check nearby grid cells
-            int gx = nx / gridCellSize;
-            int gy = ny / gridCellSize;
-            int tooClose = 0;
-            for (int j = -2; j <= 2 && !tooClose; j++) {
-                for (int i = -2; i <= 2; i++) {
-                    int cx = gx + i;
-                    int cy = gy + j;
-                    if (cx < 0 || cy < 0 || cx >= gridWidth || cy >= gridHeight) continue;
-                    POINT* neighbor = grid[cy * gridWidth + cx];
-                    if (neighbor) {
-                        int dx = neighbor->x - nx;
-                        int dy = neighbor->y - ny;
-                        float spacing = calculateDensityDistance(center.y * mainImg->width + center.x, densityMap, PIXEL_SPACING);
-
-                        if (dx*dx + dy*dy < spacing*spacing) {
-                            tooClose = 1;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (!tooClose) {
-                poissonPoints[sampleCount] = (POINT){nx, ny};
-                processList[processCount++] = poissonPoints[sampleCount];
-                grid[getCellIndex(nx, ny)] = &poissonPoints[sampleCount];
-                sampleCount++;
-            }
-
-            attempts++;
-        }
-
-        // Remove processed center
-        processList[idx] = processList[--processCount];
-    }
-
-    provinceCount = sampleCount;
-
-
-    // Generate province centers using poisson sampling (old)
-    /*
-    int pointCount = 0;
-    while (pointCount < provinceCount) {
-        int x = rand() % mainImg->width;
-        int y = rand() % mainImg->height;
-        int index = y * mainImg->width + x;
-        
-        if (map[index] != 0 || densityMap[index] == 0) continue;
-        if (1 + rand() % 100 > densityMap[index]) continue;
-        if (!isFarEnough(x, y, PIXEL_SPACING)) continue;
-
-        poissonPoints[pointCount] = (POINT){x, y};
-        grid[getGridIndex(x, y, PIXEL_SPACING)] = &poissonPoints[pointCount];
-        pointCount++;
-    }
-    */
-
-    // Initialize provinces
-    for (int i = 0; i < provinceCount; i++) {
-        int x = poissonPoints[i].x;
-        int y = poissonPoints[i].y;
-        int index = y * mainImg->width + x;
-
-        map[index] = i+1;
-        int cID = cmask ? cmask->countryMap[index] : -2;
-
-        Points[i].x = x;
-        Points[i].y = y;
-        Points[i].ID = i+1;
-        Points[i].growthSpeed = calculateGrowthSpeed(index, densityMap);
-        Points[i].borderCount = 1;
-        Points[i].borderArrayCapacity = 100;
-        Points[i].countryID = cID;
-        Points[i].size = 0;
-
-        Points[i].borderArray = malloc(100 * sizeof(POINT));
-        if (!Points[i].borderArray) {
-            perror("Failed to allocate border array");
-            // Free previously allocated border arrays
-            for (int j = 0; j < i; j++) {
-                free(Points[j].borderArray);
-            }
+    if (naval_provinceCount){
+        if (!provinceFunction(provinceCount, -1, Points, poissonPoints, cmask, map, densityMap, floodMap, naval_provinceCount, NAVAL_PIXEL_SPACING, mainImg->width, mainImg->height)){
             goto cleanup;
         }
-        Points[i].borderArray[0] = (POINT){x, y};
     }
-
-    puts("DEBUG : FINISHED SPAWNING PROVINCE ROOTS");
-
-    // Grow provinces using BFS
-    int activeProvinces = provinceCount;
-    int unchangedIterations = 0;
-    const int MAX_UNCHANGED = 1000;
-
-    while (activeProvinces > 0 && unchangedIterations < MAX_UNCHANGED) {
-        int changed = 0;
-        
-        for (int i = 0; i < provinceCount; i++) {
-            int before = Points[i].borderCount;
-            if (before > 0) {
-                growProvince(&Points[i], map, densityMap, cmask, mainImg->width, mainImg->height);
-                if (Points[i].borderCount != before) changed = 1;
-                if (Points[i].borderCount == 0) {
-                    activeProvinces--;
-                }
-            }
-        }
-        
-        if (!changed) unchangedIterations++;
-        else unchangedIterations = 0;
-    }
-
-    puts("DEBUG : finished growing provinces");
 
     // Assign colors to provinces
-    colorHashMap = malloc(sizeof(BGR) * (provinceCount + 1));
+    colorHashMap = malloc(sizeof(BGR) * ((provinceCount + 1) + (naval_provinceCount + 1)));
     if (!colorHashMap) {
         perror("Failed to allocate color hash map");
         goto cleanup;
     }
 
-    for (int i = 0; i < provinceCount; i++) {
-        colorHashMap[i] = randColor(i+1, colorHashMap, provinceCount);
+    for (int i = 0; i < provinceCount + naval_provinceCount; i++) {
+        colorHashMap[i] = randColor(i+1, colorHashMap, provinceCount + naval_provinceCount, Points[i].water);
     }
     puts("DEBUG : finished assigning colors.");
 

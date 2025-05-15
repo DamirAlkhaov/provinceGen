@@ -1,12 +1,26 @@
 #include "BGR.h"
 
 //simple random color function that also checks for any similar exisiting colors.
-BGR randColor(int ID, BGR *hash, int size) {
+BGR randColor(int ID, BGR *hash, int size, int waterTile) {
     int attempts = 0;
     while (attempts < 1000) { 
         int red = ((ID + attempts) * 37 * (attempts + 2)) % 256;
         int green = ((ID + attempts) * 67 * (attempts + 1)) % 256;
         int blue = ((ID + attempts) * 113 * (attempts + 5)) % 256;
+
+        //only water tiles can have 255 blue;
+        if (waterTile != 0){
+            blue = 255;
+        } else {
+            if (blue == 255){
+                blue -= 40;
+            }
+        }
+
+        if ((blue < 5 && red < 5 && green < 5) || (blue > 250 && red > 250 && green > 250)){
+            attempts++;
+            continue;
+        }
         
         int collision = 0;
         for (int i = 0; i < size; i++) {

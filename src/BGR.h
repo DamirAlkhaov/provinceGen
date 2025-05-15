@@ -11,7 +11,7 @@ typedef struct {
 } BGR;
 
 //simple random color function that also checks for any similar exisiting colors.
-BGR randColor(int ID, BGR *hash, int size);
+BGR randColor(int ID, BGR *hash, int size, int waterTile);
 
 int BGR_Compare(BGR c1, BGR c2);
 #endif
