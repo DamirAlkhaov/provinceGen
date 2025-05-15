@@ -206,7 +206,7 @@ int provinceFunction(int initial, int waterTile, PROVINCE_CENTER* Points, POINT*
     int maxPoints = maxSamples * 2;
     gridCellSize = PIXEL_SPACING / sqrtf(2.0f);
 
-    int minIslandSize = waterTile ? 1000 : 100;
+    int minIslandSize = waterTile ? minNavalSize : minLandSize;
 
     gridWidth = (width / gridCellSize) + 1;
     gridHeight = (height / gridCellSize) + 1;

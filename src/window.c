@@ -116,6 +116,7 @@ int main(){
         if (GuiButton((Rectangle){420, 70, 100, 30}, "Edit")){
             maskBoxEditMode = true;
         }
+        // ------------
 
         //countries mask input
         DrawText("Countries mask:", 10, 110, 20, BLACK);
@@ -125,7 +126,23 @@ int main(){
         if (GuiButton((Rectangle){420, 130, 100, 30}, "Edit")){
             countryBoxEditMode = true;
         }
+        // ------------------
 
+        // island size sliders
+        DrawText("Preferrably not to change this\nunless you are using\na different image size.", 400, 180, 20, BLACK);
+        sprintf(pixelS, "Minimum Land Size: %d", (int)minLandSize);
+        DrawText(pixelS, 10, 160, 20, BLACK);
+
+        
+        GuiSlider((Rectangle){30, 180, 300, 20}, "50", "1000", &minLandSize, 50, 1000);
+
+        sprintf(pixelS, "Minimum Naval Size: %d", (int)minNavalSize);
+        DrawText(pixelS, 10, 200, 20, BLACK);
+
+        
+        GuiSlider((Rectangle){30, 220, 300, 20}, "100", "10000", &minNavalSize, 100, 10000);
+        //-------------
+        //Gen and save
         DrawText("Press SPACE to generate!", 10, 770, 20, BLACK);
         if (GuiButton((Rectangle){400, 770, 100, 20}, "SAVE")){
             if (hasTexture){
@@ -134,6 +151,8 @@ int main(){
                 UnloadImage(tmp);
             }
         }
+        // -------------
+
         EndDrawing();
     }
 
