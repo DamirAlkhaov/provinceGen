@@ -94,7 +94,7 @@ int main(){
 
         //pixel spacing slider
         char pixelS[256];
-        sprintf(pixelS, "Pixel Spacing: %.2f", pixelSpacing);
+        sprintf(pixelS, "Pixel Spacing: %d", (int)pixelSpacing);
         DrawText(pixelS, 10, 10, 20, BLACK);
 
         
@@ -102,7 +102,7 @@ int main(){
         //--------------------------------
 
         //naval spacing slider
-        sprintf(pixelS, "Naval Pixel Spacing: %.2f", navalPixelSpacing);
+        sprintf(pixelS, "Naval Pixel Spacing: %d", (int)navalPixelSpacing);
         DrawText(pixelS, 380, 10, 20, BLACK);
         
         GuiSlider((Rectangle){390, 30, 300, 20}, "15", "300", &navalPixelSpacing, 15, 300);
