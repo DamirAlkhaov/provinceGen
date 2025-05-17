@@ -19,12 +19,13 @@ endif
 
 CC = gcc
 CFLAGS = -Iinclude/
-SRC = src/window.c src/program.c src/countriesMask.c src/BGR.c src/bmpLoader.c
-EDGE_SRC = src/edgeDetection.c src/BGR.c src/bmpLoader.c
+SRC = src/generator/window.c src/generator/program.c src/generator/countriesMask.c src/BGR.c src/bmpLoader.c
+E_SRC = src/editor/provinceEditor.c
+EDGE_SRC = src/edges/edgeDetection.c src/BGR.c src/bmpLoader.c
 
 .PHONY: all clean
 
-all: province edge
+all: province edge editor
 
 province:
 	$(CC) $(CFLAGS) $(SRC) -o $@$(EXT) -Llib/ $(LIBS)
@@ -33,6 +34,9 @@ province:
 edge:
 	$(CC) -Isrc/ $(EDGE_SRC) -o $@$(EXT)
 	$(STRIP) $@$(EXT)
+
+editor:
+	$(CC) $(CFLAGS) $(E_SRC) -o $@$(EXT) -Llib/ $(LIBS)
 
 clean:
 	rm -f province$(EXT) edge$(EXT)
