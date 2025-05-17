@@ -15,12 +15,17 @@ int main(void)
 
     InitWindow(screenWidth, screenHeight, "Province Map Click and Highlight");
 
+    // high light shader
+    Shader shader = LoadShader(0, "highlight.fs");
+    int locSelectedColor = GetShaderLocation(shader, "selectedColor");
+
     Image background = LoadImage("eu.bmp");
 
     Image idMapImage = LoadImage("output_raylib.bmp");
     ImageFormat(&idMapImage, PIXELFORMAT_UNCOMPRESSED_R8G8B8);  // ensure RGB
 
     Texture2D mapTexture = LoadTextureFromImage(background);
+    Texture2D idTexture = LoadTextureFromImage(idMapImage);
     Color *idPixels = LoadImageColors(idMapImage);
 
     Color selectedColor = {0};
@@ -79,48 +84,6 @@ int main(void)
     UnloadImage(empty);
     // ---------------------
 
-    // Highlight map gen
-    COLOR_ARRAY colorArray;
-    colorArray.colors = malloc(1000 * sizeof(Color));
-    if (!colorArray.colors){
-        perror("Failed to allocate memory for color array");
-        return -1;
-    }
-    colorArray.size = 1000;
-    colorArray.count = 0;
-    for (int i = 0; i < idMapImage.width * idMapImage.height && 1 < 0; i++){
-        Color current = idPixels[i];
-
-        //ignore black and white
-        if (ColorToInt(current) == ColorToInt(BLACK) || ColorToInt(current) == ColorToInt(WHITE) || current.a == 0) continue;
-
-        bool new = true;
-        // search if color was already documented
-        for (int j = 0; j < colorArray.count; j++){
-            if (ColorToInt(colorArray.colors[j]) == ColorToInt(current)){
-                new = false;
-                break;
-            }
-        }
-
-        if (new){
-            if (colorArray.count + 1 >= colorArray.size){
-                int newSize = colorArray.size * 2;
-                Color* newArr = realloc(colorArray.colors, newSize * sizeof(Color));
-                if (!newArr){
-                    perror("Failed to expand colors array");
-                    return -1;
-                }
-                colorArray.colors = newArr;
-                colorArray.size = newSize;
-            }
-            colorArray.colors[colorArray.count++] = current;
-            printf("New province: %d\n", colorArray.count);
-        }
-    }
-    printf("Province count: %d\n", colorArray.count);
-
-    // ---------------------
     while (!WindowShouldClose())
     {
         // Camera movement
@@ -135,58 +98,40 @@ int main(void)
         if (camera.zoom < 0.1f) camera.zoom = 0.1f;
         if (camera.zoom > 5.f) camera.zoom = 5.f;
 
-        // Mouse click logic
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-            Vector2 mouse = GetMousePosition();
-            Vector2 worldMouse = GetScreenToWorld2D(mouse, camera);
-            int x = (int)worldMouse.x;
-            int y = (int)worldMouse.y;
+        Vector2 mouse = GetMousePosition();
+        Vector2 worldMouse = GetScreenToWorld2D(mouse, camera);
+        int x = (int)worldMouse.x;
+        int y = (int)worldMouse.y;
 
-            if (x >= 0 && y >= 0 && x < idMapImage.width && y < idMapImage.height) {
-                if (ColorToInt(selectedColor) != ColorToInt(idPixels[y * idMapImage.width + x])){
-                    selectedColor = idPixels[y * idMapImage.width + x];
-                    provinceSelected = true;
-
-                    if (provinceHighlightTexture.id > 0) {
-                        UnloadTexture(provinceHighlightTexture);
-                    }
-
-                    // Create mask image
-                    Image mask = GenImageColor(idMapImage.width, idMapImage.height, BLANK);
-                    Color *maskPixels = LoadImageColors(mask);
-
-                    for (int i = 0; i < idMapImage.width * idMapImage.height; i++) {
-                        if (ColorToInt(idPixels[i]) == ColorToInt(selectedColor)) {
-                            maskPixels[i] = (Color){255, 255, 255, 120}; // yellow transparent
-                        }
-                    }
-
-                    Image newMask = {
-                        .data = maskPixels,
-                        .width = mask.width,
-                        .height = mask.height,
-                        .mipmaps = 1,
-                        .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
-                    };
-
-                    provinceHighlightTexture = LoadTextureFromImage(newMask);
-                    UnloadImage(mask); // Frees internal .data pointer
-                }
-            }
+        Color selected = BLACK;
+        if (x >= 0 && y >= 0 && x < mapTexture.width && y < mapTexture.height) {
+            selected = idPixels[y * mapTexture.width + x];
         }
+
+        float rgb[3] = {
+            selected.r / 255.0f,
+            selected.g / 255.0f,
+            selected.b / 255.0f
+        };
+        SetShaderValue(shader, locSelectedColor, rgb, SHADER_UNIFORM_VEC3);
 
         BeginDrawing();
             ClearBackground(RAYWHITE);
 
             BeginMode2D(camera);
 
-                DrawTexture(mapTexture, 0, 0, WHITE);
+                if (camera.zoom >= 0.3f) {
 
-                if (provinceSelected) {
-                    DrawTexture(provinceHighlightTexture, 0, 0, WHITE);
+                    BeginShaderMode(shader);
+                        SetShaderValueTexture(shader, GetShaderLocation(shader, "baseMap"), mapTexture);
+                        SetShaderValueTexture(shader, GetShaderLocation(shader, "idMap"), idTexture);
+                        DrawTexture(mapTexture, 0, 0, WHITE);
+                    EndShaderMode();
+                    
+                    DrawTexture(borderOutlineTxt, 0, 0, WHITE);
+                } else {
+                    DrawTexture(mapTexture, 0, 0, WHITE);
                 }
-
-                if (camera.zoom >= 0.3f) DrawTexture(borderOutlineTxt, 0, 0, WHITE);
 
             EndMode2D();
 
